@@ -1,0 +1,8 @@
+Набор бинарных утилит для операций с apk
+
+\7za.exe - архиватор - http://www.7-zip.org/download.html
+\apktool.jar - программа для сборки-разборки apk - http://code.google.com/p/android-apktool/
+\aapt_Custom.exe - программа, требующаяся для сборки apk (из комплекта apktool)
+\aapt_SDK.exe - программа, требующаяся для сборки apk (из комплекта Android SDK) - http://developer.android.com/sdk/index.html
+
+По умолчанию для разборки-сборки apk файлов (в т.ч. фреймворка) используется более свежая версия aapt.exe из SDK. Версия из набора apktool не умеет обрабатывать нестандартные названия ресурсов (вроде drawable-sw600dp-mdpi - выдает ошибку вида "invalid resource directory name: ...\SystemUI\res/values-sw600dp-port"), поэтому версия из SDK более всеядна. Тем не менее, если эта версия у вас выдает ошибки при разборке или сборке, можно попробовать использовать apktool версию. Для этого откройте APK_worker.bat в текстовом редакторе и раскомментируйте строчку ":: set AAPT=aapt_Custom.exe" (просто уберите символы "::").

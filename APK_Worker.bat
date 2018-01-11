@@ -2,8 +2,11 @@
 :: Requirements:
 ::   You must have JDK installed and java.exe in PATH
 :: Usage:
-::   Put all apk's from your device's /system/framework into folder \framework
-::   Run APK_worker.bat with parameters
+::   1. Copy all apk files from your device's /system/framework into some folder
+::   2. Run APK_worker.bat instfw {framework_folder}
+::   3. Run APK_worker.bat {command} [{source}] [{param}]
+::   You can use env variables for changing options:
+::	 APKW_UseCustomAAPT - use aapt_Custom.exe instead of SDK version
 
 @echo off
 
@@ -11,10 +14,13 @@
 setlocal
 
 set CDir=%~dp0%
-:: Use aapt from SDK by default
-set AAPT=aapt_SDK.exe
-:: ! Uncomment this line ONLY if you have troubles building/decompiling apk's !
-:: set AAPT=aapt_Custom.exe
+IF NOT DEFINED APKW_UseCustomAAPT (
+	:: Use aapt from SDK by default
+	set AAPT=aapt_SDK.exe
+) ELSE (
+	:: ! Use ONLY if you have troubles building/decompiling apk's !
+	set AAPT=aapt_Custom.exe
+)
 
 :: Check all needed files
 
@@ -42,23 +48,14 @@ if not exist "%CDir%\7za.exe" (
 	goto :Err
 )
 
-:: Perform operation basing on the parameter given
+:: ***** Perform operation basing on the parameter given *****
 
-:: Wrong parameters/help parameters - print usage
+:: No parameters/help parameters - print usage
 if .%1%.==.. goto label_Help
 if .%1%.==./?. goto label_Help
 if .%1%.==.help. goto label_Help
 
-:: Split 2nd param into path and name (for build and fixfolders, no name is needed)
-if .%1%.==.build. (
-    set APK_Path=%~dpn2%
-) else if .%1%.==.fixfolders. (
-    set APK_Path=%~dpn2%
-) else (
-    set APK_Path=%~dp2%
-    set APK_Name=%~n2%
-)
-
+if .%1%.==.instfw. goto label_Install_FW
 if .%1%.==.decomp. goto label_Decomp_Full
 if .%1%.==.decomp_src. goto label_Decomp_Src
 if .%1%.==.decomp_res. goto label_Decomp_Res
@@ -66,138 +63,177 @@ if .%1%.==.fixfolders. goto label_FixFolders
 if .%1%.==.build. goto label_Build
 if .%1%.==.modify. goto label_Modify
 if .%1%.==.sign. goto label_Sign
-if .%1%.==.clean. goto label_Clean
+if .%1%.==.pack. goto label_Pack
+if .%1%.==.clean. goto label_Clean_FW
 
-:: Help
+:: ***** Actions *****
+
+:: ### Help
 :label_Help
-echo Script for main operations with APK
-echo Usage:
-echo APK_Worker.bat {command} [{source}] [{param}]
-echo command:
-echo   /?, help - this text
-echo   decomp - full decompile APK (res + source) to {apk_path}\{apk_name} folder
-echo   decomp_res - decompile APK (res only - faster) to {apk_path}\{apk_name} folder
-echo   decomp_src - decompile APK (source only) to {apk_path}\{apk_name} folder
-echo   fixfolders - fix folder names that were wrongfully renamed on decompile
-echo   build - build temporary APK to {apk_path}\build\
-echo   modify - add/replace files inside APK
-echo   sign - remove certificate and sign the APK
-echo   clean - remove installed frameworks from %HOMEDRIVE%%HOMEPATH%\apktool\framework
-echo For detailed info, check README file
-pause
-goto :EOF
+	echo Script for main operations with APK
+	echo Usage:
+	echo APK_Worker.bat {command} [{source}] [{param}]
+	echo command:
+	echo   help, /? - this text
+	echo   instfw - install frameworks (required for building/decompiling only)
+	echo	 {source} - path to framework APK
+	echo   decomp - full decompile APK (res + source)
+	echo	 {source} - APK file
+	echo	 {param} - (opt) folder for extracted files. Default: Path({source})\Name({source})\
+	echo   decomp_res - decompile APK (res only - faster)
+	echo	 {source} - APK file
+	echo	 {param} - (opt) folder for extracted files. Default: Path({source})\Name({source})\
+	echo   decomp_src - decompile APK (source only)
+	echo	 {source} - APK file
+	echo	 {param} - (opt) folder for extracted files. Default: Path({source})\Name({source})\
+	echo   fixfolders - fix folder names in APK folder that were wrongfully renamed on decompile
+	echo	 {source} - APK folder
+	echo	 {param} - path to file with rename rules
+	echo   build - build temporary files
+	echo	 {source} - folder with source files
+	echo	 {param} - (opt) path to resulting APK. Default: Path({source})\Name({source})_built.apk
+	echo	 Files are built to {source}\build
+	echo   modify - add/replace files inside APK
+	echo	 {source} - APK file
+	echo	 {param} - path to file with modify rules
+	echo   pack - pack files to APK
+	echo	 {source} - source folder
+	echo	 APK is built to {source}\..
+	echo   sign - remove certificate and sign the APK {source}
+	echo	 {source} - APK file
+	echo   clean - remove installed frameworks from %HOMEDRIVE%%HOMEPATH%\apktool\framework
+	echo For detailed info, check README file
+	pause
+	goto :EOF
 
-:: Decompile res and sources
+:: ### (Re)Install framework
+:label_Install_FW
+
+	set FW_Path=%~2%
+
+	call java.exe -jar "%CDir%\apktool.jar" if "%FW_Path%" || goto :Err
+	
+	goto :EOF
+
+:: ### Decompile res and sources
 :label_Decomp_Full
 
-SET Decomp_Param=
-goto label_Decomp
+	SET Decomp_Param=
+	goto label_Decomp
 
-:: Decompile res only
+:: ### Decompile res only
 :label_Decomp_Res
 
-SET Decomp_Param=--no-src
-goto label_Decomp
+	SET Decomp_Param=--no-src
+	goto label_Decomp
 
-:: Decompile src only
+:: ### Decompile src only
 :label_Decomp_Src
 
-SET Decomp_Param=--no-res
-goto label_Decomp
+	SET Decomp_Param=--no-res
+	goto label_Decomp
 
-:: Do decompile
+:: ### Do decompile
 :label_Decomp
 
-:: apktool couldn't work if aapt.exe isn't in the %CD% so moving there temporarily
-pushd "%CDir%"
+	set APK_Path=%~dp2%
+	set APK_Name=%~n2%
+	set Output_Path=%~3%
+	if .%Output_Path%.==.. set Output_Path=%APK_Path%\%APK_Name%
 
-:: (Re)Install all the frameworks (sometimes required)
-rd /s/q "%HOMEDRIVE%%HOMEPATH%\apktool\framework" 2> nul
-FOR %%F IN ("%APK_Path%\framework\*.apk") DO java -jar "apktool.jar" if "%%F"
+	rd /s/q "%Output_Path%" 2> nul
+	
+	:: Decompile
+	call java.exe -jar "%CDir%\apktool.jar" d %Decomp_Param% --force -o "%Output_Path%" "%APK_Path%\%APK_Name%.apk" || goto :Err
 
-rd /s/q "%APK_Path%\%APK_Name%" 2> nul
+	goto :EOF
 
-:: Decompile
-call java.exe -jar "apktool.jar" d %Decomp_Param% --force "%APK_Path%\%APK_Name%.apk" "%APK_Path%\%APK_Name%"
-
-if errorlevel 1 (
-    popd
-    goto :Err
-)
-popd
-goto :EOF
-
-:: Do fix folders
+:: ### Do fix folders
 :label_FixFolders
 
-set Lst_File=%~3%
+	set Src_Path=%~dp2%
+	set Lst_File=%~3%
+	
+	for /f "tokens=1,*" %%s in (%Lst_File%) do (
+		ren "%Src_Path%\%%s" "%%t"
+	)
+	goto :EOF
 
-for /f "tokens=1,*" %%s in (%Lst_File%) do (
-    ren "%APK_Path%\%APK_Name%\%%s" "%%t"
-)
-goto :EOF
-
-:: Do build
+:: ### Do build
 :label_Build
 
-:: apktool couldn't work if aapt.exe isn't in the %CD% so moving there temporarily
-pushd "%CDir%"
+	set Src_Path=%~2%
+	set NewAPK_Path=%~3%
+	if .%NewAPK_Path%.==.. set NewAPK_Path=%Src_Path%_built.apk
 
-:: Build
-call java.exe -jar "apktool.jar" b --force-all "%APK_Path%"
+	:: Build
+	call java.exe -jar "%CDir%\apktool.jar" b --force-all -o "%NewAPK_Path%" "%Src_Path%" || goto :Err
+	
+	goto :EOF
 
-if errorlevel 1 (
-    popd
-    goto :Err
-)
-popd
-goto :EOF
-
-:: Replace/remove files in APK with files from %3 according to list file %4
+:: ### Replace/remove files in APK with files from %3 according to list file %4
 :label_Modify
 
-set Src_Path=%~3%
-set Lst_File=%~4%
+	set APK_FullPath=%~2%
+	set Src_Path=%~3%
+	set Lst_File=%~4%
+	
+	:: Changing CD so that 7zip could add/remove files with correct paths
+	pushd "%Src_Path%"
+	for /f "tokens=1,*" %%s in (%Lst_File%) do (
+		if .%%s.==.-. (
+			call "%CDir%\7za.exe" d -tzip "%APK_FullPath%" "%%t" || (popd && goto :Err)
+		) else (
+			call "%CDir%\7za.exe" a -tzip -mx%%s "%APK_FullPath%" "%%t" || (popd && goto :Err)
+		)
+	)
+	popd
+	goto :EOF
 
-:: Changing CD so that 7zip could add/remove files with correct paths
-pushd "%Src_Path%"
-for /f "tokens=1,*" %%s in (%Lst_File%) do (
-    if .%%s.==.-. (
-        call "%CDir%\7za.exe" d -tzip "%APK_Path%\%APK_Name%.apk" "%%t"
-    ) else (
-        call "%CDir%\7za.exe" a -tzip -mx%%s "%APK_Path%\%APK_Name%.apk" "%%t"
-    )
-    if errorlevel 1 (
-        popd
-        goto :Err
-    )
-)
-popd
-goto :EOF
-
-:: Remove certificate(s) and sign APK
+:: ### Remove certificate(s) and sign APK
 :label_Sign
 
-if not exist "%CDir%\..\Sign_APK\Sign.bat" (
-    echo "%CDir%\..\Sign_APK\Sign.bat" not found!
-    set errorlevel=1
-    goto :Err
-)
+	set APK_FullPath=%~2%
 
-:: Remove previous certs
-call "%CDir%\7za.exe" d -tzip "%APK_Path%\%APK_Name%.apk" META-INF\*
-if errorlevel 1 goto :Err
+	if not exist "%CDir%\..\Sign_APK\Sign.bat" (
+		echo "%CDir%\..\Sign_APK\Sign.bat" not found!
+		goto :Err
+	)
+	
+	:: Remove previous certs
+	call "%CDir%\7za.exe" d -tzip "%APK_FullPath%" META-INF\* || goto :Err
+	
+	:: Sign with our own cert
+	call "%CDir%\..\Sign_APK\Sign.bat" "%APK_FullPath%" || goto :Err
+	
+	goto :EOF
 
-:: Sign with our own cert
-call "%CDir%\..\Sign_APK\Sign.bat" "%APK_Path%\%APK_Name%.apk"
-if errorlevel 1 goto :Err
+:: ### Pack files into APK; *.arsc and *.png files are added with 0 compression
+:label_Pack
 
-goto :EOF
+	set Src_Path=%~2%
+	set NewAPK_Path=..\Built.apk
+	
+	:: changing CD for 7zip to handle relative dirs
+	pushd "%Src_Path%"
 
-:: Remove frameworks
-:label_Clean
+	del "%NewAPK_Path%" 2> nul
+	
+	:: Add files with compression
+	call "%CDir%\7za.exe" a -tzip -mx5 -r "%NewAPK_Path%" * -x!*.arsc -x!*.png "%Src_Path%"
 
-rd /s/q "%HOMEDRIVE%%HOMEPATH%\apktool\framework" 2> nul
+	:: Add files without compression
+	call "%CDir%\7za.exe" a -tzip -mx0 -r "%NewAPK_Path%" *.arsc *.png "%Src_Path%"
+	
+	popd
+	goto :EOF
+
+:: ### Remove frameworks
+:label_Clean_FW
+
+	rd /s/q "%HOMEDRIVE%%HOMEPATH%\apktool\framework" 2> nul
+	goto :EOF
 
 :Err
 echo Error occured - process not finished
+exit /b 1
